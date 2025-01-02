@@ -16,123 +16,71 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 세션 상태 초기화
-if 'current_step' not in st.session_state:
-    st.session_state.current_step = 'initial'
-if 'questions' not in st.session_state:
-    st.session_state.questions = None
-if 'current_question_index' not in st.session_state:
-    st.session_state.current_question_index = 0
-if 'wrong_questions' not in st.session_state:
-    st.session_state.wrong_questions = []
-if 'misconceptions' not in st.session_state:
-    st.session_state.misconceptions = []
-if 'generated_questions' not in st.session_state:
-    st.session_state.generated_questions = []
-
 # 데이터 로드
 @st.cache_data
-def load_data(file_name="/train.csv"):
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    df_folder = os.path.join(base_path, 'Data')
-    df = pd.read_csv(df_folder + file_name)
-    return df
+def load_data():
+    try:
+        df = pd.read_csv("Data/train.csv")
+        return df
+    except FileNotFoundError:
+        st.error("train.csv 파일을 찾을 수 없습니다.")
+        return None
 
-# misconception mapping 로드
-@st.cache_data
-def load_misconception_mapping():
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    mapping_path = os.path.join(base_path, 'Data', 'misconception_mapping.csv')
-    mapping_df = pd.read_csv(mapping_path)
-    return mapping_df
+def initialize_session_state():
+    if 'started' not in st.session_state:
+        st.session_state.started = False
+    if 'current_step' not in st.session_state:
+        st.session_state.current_step = 'initial'
+    if 'questions' not in st.session_state:
+        st.session_state.questions = None
+    if 'current_question_index' not in st.session_state:
+        st.session_state.current_question_index = 0
+    if 'wrong_questions' not in st.session_state:
+        st.session_state.wrong_questions = []
+    if 'misconceptions' not in st.session_state:
+        st.session_state.misconceptions = []
+    if 'generated_questions' not in st.session_state:
+        st.session_state.generated_questions = []
 
-def get_misconception_id(question_row, selected_answer):
-    """선택한 답변에 해당하는 misconception ID를 반환"""
-    misconception_id = None
-    if selected_answer == 'A':
-        misconception_id = question_row['MisconceptionAId']
-    elif selected_answer == 'B':
-        misconception_id = question_row['MisconceptionBId']
-    elif selected_answer == 'C':
-        misconception_id = question_row['MisconceptionCId']
-    elif selected_answer == 'D':
-        misconception_id = question_row['MisconceptionDId']
-    return misconception_id
+def start_quiz():
+    df = load_data()
+    if df is not None:
+        st.session_state.questions = df.sample(n=10, random_state=42)
+        st.session_state.started = True
+        st.session_state.current_step = 'quiz'
+        st.session_state.current_question_index = 0
+        st.session_state.wrong_questions = []
+        st.session_state.misconceptions = []
+        st.session_state.generated_questions = []
 
-def get_misconception_description(misconception_id, mapping_df):
-    """Misconception ID에 해당하는 설명을 반환"""
-    if pd.isna(misconception_id):
-        return "Unknown misconception"
-    row = mapping_df[mapping_df['MisconceptionId'] == misconception_id]
-    if len(row) == 0:
-        return "Unknown misconception"
-    return row.iloc[0]['MisconceptionName']
-
-@st.cache_resource
-def load_question_generator():
-    """문제 생성 모델 로드"""
-    model_name = "meta-llama/Llama-2-7b-chat-hf"  # 예시 모델
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForCausalLM.from_pretrained(model_name)
-    return tokenizer, model
-
-def generate_similar_question(question, misconception_id, tokenizer, model):
-    """
-    주어진 문제와 misconception ID를 바탕으로 새로운 문제 생성
-    """
-    prompt = f"""다음 문제와 misconception을 참고하여 새로운 문제를 생성해주세요:
-
-원본 문제: {question['QuestionText']}
-Misconception ID: {misconception_id}
-
-새로운 문제를 생성할 때는 다음 형식을 따라주세요:
-- 문제:
-- 보기 A:
-- 보기 B:
-- 보기 C:
-- 보기 D:
-- 정답:
-- 해설:
-"""
+def handle_answer(answer, current_q):
+    if answer != current_q['CorrectAnswer']:
+        st.session_state.wrong_questions.append(current_q)
+        misconception_id = None
+        if answer == 'A':
+            misconception_id = current_q.get('MisconceptionAId')
+        elif answer == 'B':
+            misconception_id = current_q.get('MisconceptionBId')
+        elif answer == 'C':
+            misconception_id = current_q.get('MisconceptionCId')
+        elif answer == 'D':
+            misconception_id = current_q.get('MisconceptionDId')
+        st.session_state.misconceptions.append(misconception_id)
     
-    # 실제 모델을 사용한 생성 로직
-    inputs = tokenizer(prompt, return_tensors="pt")
-    outputs = model.generate(
-        inputs.input_ids,
-        max_length=512,
-        temperature=0.7,
-        top_p=0.9,
-        num_return_sequences=1
-    )
-    generated_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-    
-    # 생성된 텍스트 파싱 (예시)
-    return {
-        'question': f"[유사 문제] {question['QuestionText']}",
-        'choices': {
-            'A': f"새로운 보기 A - Misconception ID {misconception_id} 관련",
-            'B': f"새로운 보기 B",
-            'C': f"새로운 보기 C",
-            'D': f"새로운 보기 D"
-        },
-        'correct': 'A',
-        'explanation': f"이 문제는 Misconception ID {misconception_id}와 관련된 개념을 확인하기 위해 생성되었습니다."
-    }
+    st.session_state.current_question_index += 1
+    if st.session_state.current_question_index >= 10:
+        st.session_state.current_step = 'review'
 
 def main():
     st.title("MisconcepTutor")
     
-    # 데이터 로드
-    df = load_data()
-    mapping_df = load_misconception_mapping()
+    initialize_session_state()
     
     # 초기 화면
     if st.session_state.current_step == 'initial':
         st.write("#### 학습을 시작하겠습니다. 10개의 문제가 제공됩니다.")
         if st.button("학습 시작", type="primary"):
-            random_questions = df.sample(n=10, random_state=42)
-            st.session_state.questions = random_questions
-            st.session_state.current_step = 'quiz'
+            start_quiz()
             st.rerun()
 
     # 퀴즈 화면
@@ -152,45 +100,21 @@ def main():
         col1, col2 = st.columns(2)
         with col1:
             if st.button(f"A. {current_q['AnswerAText']}", key='A', use_container_width=True):
-                answer = 'A'
-                if answer != current_q['CorrectAnswer']:
-                    misconception_id = get_misconception_id(current_q, answer)
-                    st.session_state.wrong_questions.append(current_q)
-                    st.session_state.misconceptions.append(misconception_id)
-                st.session_state.current_question_index += 1
+                handle_answer('A', current_q)
                 st.rerun()
             
             if st.button(f"C. {current_q['AnswerCText']}", key='C', use_container_width=True):
-                answer = 'C'
-                if answer != current_q['CorrectAnswer']:
-                    misconception_id = get_misconception_id(current_q, answer)
-                    st.session_state.wrong_questions.append(current_q)
-                    st.session_state.misconceptions.append(misconception_id)
-                st.session_state.current_question_index += 1
+                handle_answer('C', current_q)
                 st.rerun()
 
         with col2:
             if st.button(f"B. {current_q['AnswerBText']}", key='B', use_container_width=True):
-                answer = 'B'
-                if answer != current_q['CorrectAnswer']:
-                    misconception_id = get_misconception_id(current_q, answer)
-                    st.session_state.wrong_questions.append(current_q)
-                    st.session_state.misconceptions.append(misconception_id)
-                st.session_state.current_question_index += 1
+                handle_answer('B', current_q)
                 st.rerun()
             
             if st.button(f"D. {current_q['AnswerDText']}", key='D', use_container_width=True):
-                answer = 'D'
-                if answer != current_q['CorrectAnswer']:
-                    misconception_id = get_misconception_id(current_q, answer)
-                    st.session_state.wrong_questions.append(current_q)
-                    st.session_state.misconceptions.append(misconception_id)
-                st.session_state.current_question_index += 1
+                handle_answer('D', current_q)
                 st.rerun()
-
-        if st.session_state.current_question_index >= 10:
-            st.session_state.current_step = 'review'
-            st.rerun()
 
     # 복습 화면
     elif st.session_state.current_step == 'review':
@@ -214,22 +138,32 @@ def main():
                     st.write(wrong_q['QuestionText'])
                     st.write("**정답:**", wrong_q['CorrectAnswer'])
                     
-                    misconception_desc = get_misconception_description(misconception_id, mapping_df)
                     st.write("---")
                     st.write("**관련된 Misconception:**")
-                    st.info(f"ID: {misconception_id}\n\n{misconception_desc}")
+                    if misconception_id and not pd.isna(misconception_id):
+                        st.info(f"Misconception ID: {int(misconception_id)}")
+                    else:
+                        st.info("Misconception 정보가 없습니다.")
                     
                     if st.button(f"유사 문제 생성하기 #{i+1}"):
-                        # 문제 생성 로직
-                        tokenizer, model = load_question_generator()
-                        new_question = generate_similar_question(wrong_q, misconception_id, tokenizer, model)
+                        # 임시 문제 생성 로직
+                        new_question = {
+                            'question': f"[유사 문제] {wrong_q['QuestionText']}",
+                            'choices': {
+                                'A': "새로운 보기 A",
+                                'B': "새로운 보기 B",
+                                'C': "새로운 보기 C",
+                                'D': "새로운 보기 D"
+                            },
+                            'correct': 'A',
+                            'explanation': f"이 문제는 Misconception ID {misconception_id}와 관련되어 있습니다."
+                        }
                         st.session_state.generated_questions.append(new_question)
                         st.session_state.current_step = f'practice_{i}'
                         st.rerun()
 
         if st.button("처음으로 돌아가기"):
-            for key in st.session_state.keys():
-                del st.session_state[key]
+            st.session_state.clear()
             st.rerun()
 
     # 유사 문제 풀이 화면
@@ -244,7 +178,7 @@ def main():
         
         with col1:
             for choice in ['A', 'C']:
-                if st.button(f"{choice}. {gen_q['choices'][choice]}", use_container_width=True):
+                if st.button(f"{choice}. {gen_q['choices'][choice]}", key=f'practice_{choice}', use_container_width=True):
                     if choice == gen_q['correct']:
                         st.success("정답입니다!")
                     else:
@@ -253,7 +187,7 @@ def main():
 
         with col2:
             for choice in ['B', 'D']:
-                if st.button(f"{choice}. {gen_q['choices'][choice]}", use_container_width=True):
+                if st.button(f"{choice}. {gen_q['choices'][choice]}", key=f'practice_{choice}', use_container_width=True):
                     if choice == gen_q['correct']:
                         st.success("정답입니다!")
                     else:
