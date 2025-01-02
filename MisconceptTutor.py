@@ -9,6 +9,7 @@ from transformers import AutoTokenizer, AutoModelForCausalLM  # 자연어 처리
 import torch          # 딥러닝 프레임워크
 from dotenv import load_dotenv  # 환경 변수 관리
 import os             # 파일 및 경로 처리
+import time 
 
 # Streamlit 페이지 기본 설정
 st.set_page_config(
@@ -19,11 +20,15 @@ st.set_page_config(
 
 # CSV 데이터 로드 함수
 @st.cache_data  # Streamlit 캐싱 데코레이터 (성능 최적화)
-def load_data():
+def load_data(data_file = '/train.csv'):
     try:
         # Data 폴더에서 train.csv 파일 로드
-        df = pd.read_csv("Data/train.csv")
+        base_path = os.path.dirname(os.path.abspath(__file__))        
+        data_path = os.path.join(base_path, 'Data')
+        df = pd.read_csv(data_path + data_file)
+        print(f"{data_file} loaded")
         return df
+    
     except FileNotFoundError:
         # 파일이 없는 경우 에러 메시지 표시
         st.error("train.csv 파일을 찾을 수 없습니다.")
@@ -59,7 +64,11 @@ def start_quiz():
     df = load_data()
     if df is not None:
         # 10개의 랜덤 문제 선택
-        st.session_state.questions = df.sample(n=10, random_state=42)
+                
+        #random_seed = int(time.time()) # 현재 시간을 기반으로 랜덤 시드 생성
+        st.session_state.questions = df.sample(n=10, random_state=42) # 🐯 문제 중에 제대로 안나오는 것 있어서 일단 괜찮은 42로 설정 
+        #st.session_state.questions = df.sample(n=10, random_state=random_seed)
+
         # 세션 상태 초기화
         st.session_state.started = True
         st.session_state.current_step = 'quiz'
@@ -152,7 +161,6 @@ def main():
     # 복습 화면
     elif st.session_state.current_step == 'review':
         st.write("### 학습 결과")
-        # 결과 통계 표시
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("총 문제 수", "10")
@@ -161,31 +169,60 @@ def main():
         with col3:
             st.metric("틀린 문제", f"{len(st.session_state.wrong_questions)}")
         
+        # 결과에 따른 메시지 표시
+        if len(st.session_state.wrong_questions) == 0:
+            st.balloons()  # 축하 효과
+            st.success("🎉 축하합니다! 모든 문제를 맞추셨어요!")
+            st.markdown("""
+            ### 🏆 수학왕이십니다! 
+            완벽한 점수를 받으셨네요! 수학적 개념을 정확하게 이해하고 계신 것 같습니다.
+            """)
+        elif len(st.session_state.wrong_questions) <= 3:
+            st.success("잘 하셨어요! 조금만 더 연습하면 완벽할 거예요!")
+        else:
+            st.info("천천히 개념을 복습해보아요. 연습하다 보면 늘어날 거예요!")
+        
+        # 새로운 문제 세트 시작 옵션
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 새로운 문제 세트 시작하기", use_container_width=True):
+                start_quiz()  # 새로운 퀴즈 세트 시작
+                st.rerun()
+        
+        with col2:
+            if st.button("🏠 처음으로 돌아가기", use_container_width=True):
+                st.session_state.clear()
+                st.rerun()
+        
         # 틀린 문제가 있는 경우 분석 표시
         if len(st.session_state.wrong_questions) > 0:
-            st.write("### 틀린 문제 분석")
+            st.markdown("---")
+            st.write("### ✍️ 틀린 문제 분석")
             # 각 틀린 문제에 대해 분석 정보 표시
             for i, (wrong_q, misconception_id) in enumerate(zip(
                 st.session_state.wrong_questions,
                 st.session_state.misconceptions
             )):
-                with st.expander(f"틀린 문제 #{i+1}"):
-                    st.write("**문제:**")
+                with st.expander(f"📝 틀린 문제 #{i+1}"):
+                    st.write("**📋 문제:**")
                     st.write(wrong_q['QuestionText'])
-                    st.write("**정답:**", wrong_q['CorrectAnswer'])
+                    st.write("**✅ 정답:**", wrong_q['CorrectAnswer'])
                     
                     st.write("---")
-                    st.write("**관련된 Misconception:**")
+                    st.write("**🔍 관련된 Misconception:**")
                     if misconception_id and not pd.isna(misconception_id):
                         st.info(f"Misconception ID: {int(misconception_id)}")
                     else:
                         st.info("Misconception 정보가 없습니다.")
                     
                     # 유사 문제 생성 버튼
-                    if st.button(f"유사 문제 생성하기 #{i+1}"):
+                    if st.button(f"📚 유사 문제 풀어보기 #{i+1}", 
+                            use_container_width=True):
                         # TODO: 실제 문제 생성 모델 연동
                         new_question = {
-                            'question': f"[유사 문제] {wrong_q['QuestionText']}",
+                            'question': f"[연습 문제] {wrong_q['QuestionText']}",
                             'choices': {
                                 'A': "새로운 보기 A",
                                 'B': "새로운 보기 B",
@@ -198,11 +235,6 @@ def main():
                         st.session_state.generated_questions.append(new_question)
                         st.session_state.current_step = f'practice_{i}'
                         st.rerun()
-
-        # 처음으로 돌아가기 버튼
-        if st.button("처음으로 돌아가기"):
-            st.session_state.clear()
-            st.rerun()
 
     # 유사 문제 풀이 화면
     elif st.session_state.current_step.startswith('practice_'):
