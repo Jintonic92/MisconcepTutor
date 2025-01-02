@@ -18,7 +18,7 @@ MisconcepTutor는 학습자의 수학 개념 이해를 돕는 맞춤형 학습 �
 
 1. 저장소 클론
 ```bash
-git clone https://github.com/yourusername/MisconcepTutor.git
+git clone https://github.com/Jintonic92/MisconcepTutor.git
 cd MisconcepTutor
 ```
 
