@@ -277,3 +277,8 @@ def main():
 # 메인 실행
 if __name__ == "__main__":
     main()
+
+# random_state 42에서 정답
+    # D C A A C
+    # A B B B B
+
