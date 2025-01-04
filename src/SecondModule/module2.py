@@ -96,45 +96,6 @@ class SimilarQuestionGenerator:
         logger.debug(f"Generated prompt: {prompt}")
         return prompt
 
-    # def call_model_api(self, prompt: str) -> str:
-    #     """Hugging Face API 호출"""
-    #     logger.info("Calling Hugging Face API...")
-    #     headers = {"Authorization": f"Bearer {API_KEY}"}
-        
-    #     try:
-    #         response = requests.post(API_URL, headers=headers, json={"inputs": prompt})
-    #         response.raise_for_status()  # HTTP 에러 체크
-            
-    #         # 응답 내용 로깅
-    #         logger.debug(f"API Response status: {response.status_code}")
-    #         logger.debug(f"API Response headers: {response.headers}")
-    #         logger.debug(f"API Response content: {response.text}")
-            
-    #         # JSON 파싱
-    #         try:
-    #             response_data = response.json()
-    #             logger.info("Successfully parsed JSON response")
-                
-    #             # API 응답 구조 확인
-    #             if isinstance(response_data, list) and len(response_data) > 0:
-    #                 generated_text = response_data[0].get('generated_text', '')
-    #             else:
-    #                 generated_text = response_data.get('generated_text', '')
-                    
-    #             if not generated_text:
-    #                 logger.warning("No generated text in response")
-    #                 return "Error: No text generated"
-                    
-    #             return generated_text
-                
-    #         except ValueError as e:
-    #             logger.error(f"JSON parsing error: {e}")
-    #             return f"Error: Invalid JSON response - {str(e)}"
-                
-    #     except requests.exceptions.RequestException as e:
-    #         logger.error(f"API request failed: {e}")
-    #         return f"Error: API request failed - {str(e)}"
-    
     def call_model_api(self, prompt: str) -> str:
         """Hugging Face API 호출"""
         logger.info("Calling Hugging Face API...")
@@ -198,34 +159,6 @@ class SimilarQuestionGenerator:
         if not question or len(choices) < 4 or not correct_answer or not explanation:
             logger.warning("Incomplete generated question.")
         return GeneratedQuestion(question, choices, correct_answer, explanation)
-
-    # def generate_similar_question_with_text(self, construct_name: str, subject_name: str, question_text: str, correct_answer_text: str, wrong_answer_text: str, misconception_id: float) -> Tuple[Optional[GeneratedQuestion], Optional[str]]:
-    #     # 유사 문제 생성 
-    #     logger.info("Calling generate_similar_question_with_text...")
-    #     misconception_text = self.get_misconception_text(misconception_id)
-    #     if not misconception_text:
-    #         logger.info("Skipping question generation due to lack of misconception.")
-    #         return None, None
-
-    #     prompt = self.generate_prompt(construct_name, subject_name, question_text, correct_answer_text, wrong_answer_text, misconception_text)
-    #     print(prompt)
-    #     logger.info(f"Generated prompt: {prompt}")
-
-    #     generated_text = None  # 기본값으로 초기화
-    #     try:
-    #         # API 호출
-    #         generated_text = self.call_model_api(prompt)
-    #         logger.info(f"Generated text from API: {generated_text}")
-
-    #         # 파싱
-    #         generated_question = self.parse_model_output(generated_text)
-    #         logger.info(f"Generated question object: {generated_question}")
-    #         return generated_question, generated_text
-
-    #     except Exception as e:
-    #         logger.error(f"Failed to generate question: {e}")
-    #         logger.debug(f"API output for debugging: {generated_text}")
-    #         return None, generated_text
 
     def generate_similar_question_with_text(self, construct_name: str, subject_name: str, question_text: str, correct_answer_text: str, wrong_answer_text: str, misconception_id: float) -> Tuple[Optional[GeneratedQuestion], Optional[str]]:
         logger.info("generate_similar_question_with_text initiated")
