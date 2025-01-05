@@ -6,7 +6,7 @@ import torch
 
 # Hugging Face 로그인
 from huggingface_hub import login
-
+login(token="")
 # 모델 불러오기
 model_name = "minsuas/Misconceptions__1"
 model = SentenceTransformer(model_name)
