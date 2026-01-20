@@ -57,7 +57,6 @@ MisconcepTutor/
 
 - **Frontend**: Streamlit
 - **Backend**: Python
-- 🐯  수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 수정 🐯
 - **ML/AI**: 
   - Sentence Transformers (misconception 분석)
   - LLaMA (문제 생성)
